@@ -1,0 +1,97 @@
+//Load HDB Carpark data from Data.gov 
+LIB CONNECT TO 'HDB Carpark (qtsel_klg)';
+​
+RestConnectorMasterTable:
+SQL SELECT 
+    "__KEY_root",
+    (SELECT 
+        "__FK_result",
+        "__KEY_result",
+        (SELECT 
+            "short_term_parking",
+            "car_park_type",
+            "y_coord",
+            "x_coord",
+            "free_parking",
+            "gantry_height",
+            "car_park_basement",
+            "night_parking",
+            "address",
+            "car_park_decks",
+            "_id",
+            "car_park_no",
+            "type_of_parking_system",
+            "__FK_records"
+        FROM "records" FK "__FK_records")
+    FROM "result" PK "__KEY_result" FK "__FK_result")
+FROM JSON (wrap on) "root" PK "__KEY_root";
+​
+[HDBCarpark]:
+LOAD    [short_term_parking],
+    [car_park_type],
+    [y_coord],
+    [x_coord],
+    [free_parking],
+    [gantry_height],
+    [car_park_basement],
+    [night_parking],
+    [address],
+    [car_park_decks],
+    [_id],
+    [car_park_no],
+    [type_of_parking_system],
+    [__FK_records] AS [__KEY_result]
+RESIDENT RestConnectorMasterTable
+WHERE NOT IsNull([__FK_records]);
+​
+​
+DROP TABLE RestConnectorMasterTable;
+​
+
+//Convert SVY21 to LatLong 
+​LIB CONNECT TO 'SVY21 to Lat Long (qtsel_klg)';
+
+//Get no of records from HDBCarpark
+Temp_Carpark_Cnt:
+Load Count(_id) as NoOfCarPark
+Resident HDBCarpark;
+
+//Store no of carparks in variable vNoOfCarPark
+Let vNoOfCarPark = Peek('NoOfCarPark',0,Temp_Carpark_Cnt);
+
+drop Table Temp_Carpark_Cnt;
+
+Set a=0;
+
+//Use while loop to loop through the table and fetch Latitude and Longitude info from OneMap
+Do while a < vNoOfCarPark
+
+//Peek values from HDBCarpark table and assign values to respective variables
+Let vID = Peek('_id',a,'HDBCarpark');
+let vX =  '"' & Peek('x_coord',a,'HDBCarpark') & '"';
+let vY = '"' & Peek('y_coord',a,'HDBCarpark') & '"';
+
+RestConnectorMasterTable:
+SQL SELECT 
+	"latitude",
+	"longitude"
+FROM JSON (wrap on) "root"
+WITH CONNECTION (
+QUERY "X" $(vX),
+QUERY "Y" $(vY));
+
+[LatLong]:
+LOAD	$(vID) as [_id],
+[latitude],
+	[longitude]
+RESIDENT RestConnectorMasterTable;
+
+
+DROP TABLE RestConnectorMasterTable;
+
+Let a=a+1;
+
+Loop
+
+
+​
